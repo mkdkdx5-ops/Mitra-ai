@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'dart:math' as math;
 
 void main() {
   runApp(const MitraAI());
@@ -16,468 +17,305 @@ class MitraAI extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Mitra AI',
       theme: ThemeData.dark(),
-      home: const MitraHome(),
+      home: const JarvisHome(),
     );
   }
 }
 
-class MitraHome extends StatefulWidget {
-  const MitraHome({super.key});
+class JarvisHome extends StatefulWidget {
+  const JarvisHome({super.key});
 
   @override
-  State<MitraHome> createState() => _MitraHomeState();
+  State<JarvisHome> createState() => _JarvisHomeState();
 }
 
-class _MitraHomeState extends State<MitraHome>
+class _JarvisHomeState extends State<JarvisHome>
     with SingleTickerProviderStateMixin {
-
-  late AnimationController controller;
-
-  final TextEditingController input = TextEditingController();
-
   final stt.SpeechToText speech = stt.SpeechToText();
   final FlutterTts tts = FlutterTts();
+  final TextEditingController controller = TextEditingController();
+  final List<Map<String, String>> messages = [];
 
+  late AnimationController animation;
   bool listening = false;
   bool hindi = true;
-  bool speechReady = false;
-
-  String status = 'Your AI Assistant';
-  String response = 'Hello! I am Mitra. How can I help you?';
 
   @override
   void initState() {
     super.initState();
-
-    controller = AnimationController(
+    animation = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
+
+    setupVoice();
+  }
+
+  Future<void> setupVoice() async {
+    await speech.initialize();
+    await tts.setLanguage('hi-IN');
+    await tts.setSpeechRate(0.45);
+  }
+
+  Future<void> speak(String text) async {
+    await tts.stop();
+    await tts.speak(text);
+  }
+
+  String brain(String question) {
+    String q = question.toLowerCase().trim();
+
+    if (q.contains('hello') || q.contains('नमस्ते') ||
+        q.contains('हेलो') || q.contains('hi')) {
+      return hindi ? 'नमस्ते! मैं मित्रा हूँ। आपकी क्या मदद करूँ?'
+          : 'Hello! I am Mitra. How can I help you?';
+    }
+
+    if (q.contains('तुम कौन') || q.contains('who are you')) {
+      return hindi ? 'मैं मित्रा AI हूँ, आपका वॉइस असिस्टेंट।'
+          : 'I am Mitra AI, your voice assistant.';
+    }
+
+    if (q.contains('समय') || q.contains('time')) {
+      return 'अभी समय ${TimeOfDay.now().format(context)} है।';
+    }
+
+    if (q.contains('तारीख') || q.contains('date')) {
+      final now = DateTime.now();
+      return 'आज ${now.day}-${now.month}-${now.year} है।';
+    }
+
+    if (q.contains('भारत की राजधानी') ||
+        q.contains('capital of india')) {
+      return 'भारत की राजधानी नई दिल्ली है।';
+    }
+
+    if (q.contains('धन्यवाद') || q.contains('thank')) {
+      return hindi ? 'आपका स्वागत है!' : 'You are welcome!';
+    }
+
+    if (q.contains('तुम्हारा नाम') || q.contains('your name')) {
+      return 'मेरा नाम मित्रा AI है।';
+    }
+
+    if (q.contains('बाय') || q.contains('bye')) {
+      return 'अलविदा! फिर मिलेंगे।';
+    }
+
+    return hindi
+        ? 'मैंने आपका सवाल सुना है। अभी मेरा बेसिक ब्रेन है। इस सवाल का जवाब मेरे पास उपलब्ध नहीं है।'
+        : 'I heard your question. My basic brain does not have an answer for this yet.';
+  }
+
+  void addMessage(String question, String answer) {
+    setState(() {
+      messages.add({'you': question, 'jarvis': answer});
+    });
+  }
+
+  Future<void> sendMessage() async {
+    String question = controller.text.trim();
+    if (question.isEmpty) return;
+
+    controller.clear();
+    String answer = brain(question);
+    addMessage(question, answer);
+    await speak(answer);
+  }
+
+  Future<void> toggleMic() async {
+    if (listening) {
+      await speech.stop();
+      setState(() => listening = false);
+      return;
+    }
+
+    bool available = await speech.initialize(
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          if (mounted) setState(() => listening = false);
+        }
+      },
+      onError: (error) {
+        if (mounted) setState(() => listening = false);
+      },
+    );
+
+    if (!available) {
+      await speak('माइक्रोफोन उपलब्ध नहीं है।');
+      return;
+    }
+
+    setState(() => listening = true);
+
+    await speech.listen(
+      localeId: hindi ? 'hi_IN' : 'en_IN',
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 3),
+      onResult: (result) {
+        if (result.recognizedWords.isNotEmpty) {
+          controller.text = result.recognizedWords;
+          if (result.finalResult) {
+            sendMessage();
+          }
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
+    animation.dispose();
+    controller.dispose();
     speech.stop();
     tts.stop();
-    controller.dispose();
-    input.dispose();
     super.dispose();
-  }
-
-  Future<void> speak(String text) async {
-    try {
-      await tts.setLanguage(hindi ? 'hi-IN' : 'en-IN');
-      await tts.setSpeechRate(0.45);
-      await tts.setVolume(1.0);
-      await tts.speak(text);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        status = 'Voice output unavailable';
-      });
-    }
-  }
-
-  Future<void> toggleVoice() async {
-    if (listening) {
-      await speech.stop();
-      if (!mounted) return;
-
-      setState(() {
-        listening = false;
-        status = 'Ready';
-      });
-      return;
-    }
-
-    setState(() {
-      status = 'Starting microphone...';
-    });
-
-    try {
-      speechReady = await speech.initialize(
-        onStatus: (value) {
-          if (!mounted) return;
-
-          if (value == 'done' || value == 'notListening') {
-            setState(() {
-              listening = false;
-              status = 'Ready';
-            });
-          }
-        },
-        onError: (error) {
-          if (!mounted) return;
-
-          setState(() {
-            listening = false;
-            status = 'Speech error: ${error.errorMsg}';
-            response = 'Please check microphone and speech recognition settings.';
-          });
-        },
-      );
-
-      if (!speechReady) {
-        if (!mounted) return;
-
-        setState(() {
-          status = 'Speech recognition unavailable';
-          response = 'Please check your Google speech recognition service.';
-        });
-        return;
-      }
-
-      final locales = await speech.locales();
-
-      if (locales.isEmpty) {
-        if (!mounted) return;
-        setState(() {
-          status = 'No speech language available';
-        });
-        return;
-      }
-
-      final preferred = hindi ? 'hi_IN' : 'en_IN';
-
-      final matching = locales.where(
-        (locale) =>
-            locale.localeId.toLowerCase() ==
-            preferred.toLowerCase(),
-      );
-
-      final language = matching.isNotEmpty
-          ? matching.first.localeId
-          : locales.firstWhere(
-              (locale) => locale.localeId.toLowerCase().startsWith(
-                    hindi ? 'hi' : 'en',
-                  ),
-              orElse: () => locales.first,
-            ).localeId;
-
-      await speech.listen(
-        onResult: (result) {
-          if (!mounted) return;
-
-          setState(() {
-            input.text = result.recognizedWords;
-            response = result.recognizedWords.isEmpty
-                ? 'Listening...'
-                : 'You said: ${result.recognizedWords}';
-          });
-
-          if (result.finalResult &&
-              result.recognizedWords.trim().isNotEmpty) {
-            final words = result.recognizedWords;
-
-            setState(() {
-              listening = false;
-              status = 'Voice recognized';
-              response = hindi
-                  ? 'आपने कहा: $words\n\nMitra: मैंने आपकी बात सुन ली है।'
-                  : 'You said: $words\n\nMitra: I heard you clearly.';
-            });
-
-            speak(
-              hindi
-                  ? 'मैंने आपकी बात सुन ली है।'
-                  : 'I heard you clearly.',
-            );
-          }
-        },
-        localeId: language,
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 4),
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: stt.ListenMode.confirmation,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        listening = true;
-        status = hindi ? 'सुन रहा हूँ...' : 'Listening...';
-        response = hindi
-            ? 'बोलिए, मैं सुन रहा हूँ।'
-            : 'Speak now. I am listening.';
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        listening = false;
-        status = 'Microphone error';
-        response = e.toString();
-      });
-    }
-  }
-
-  Future<void> sendMessage() async {
-    if (input.text.trim().isEmpty) return;
-
-    final message = input.text.trim();
-
-    setState(() {
-      response = hindi
-          ? 'आपने लिखा: $message\n\nMitra: आपका संदेश मिल गया है।'
-          : 'You: $message\n\nMitra: I received your message.';
-      status = 'Ready to help';
-      listening = false;
-      input.clear();
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF070B18),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.cyanAccent,
-                      size: 30,
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'MITRA AI',
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          hindi = !hindi;
-                          response = hindi
-                              ? 'Hindi mode selected.'
-                              : 'English mode selected.';
-                        });
-                      },
-                      icon: const Icon(
-                        Icons.language,
-                        color: Colors.cyanAccent,
-                      ),
-                    ),
-                    Text(hindi ? 'HI' : 'EN'),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              const Text(
-                'YOUR PERSONAL ASSISTANT',
-                style: TextStyle(
-                  color: Colors.white54,
-                  letterSpacing: 3,
-                  fontSize: 11,
-                ),
-              ),
-
-              const SizedBox(height: 35),
-
-              AnimatedBuilder(
-                animation: controller,
-                builder: (context, child) {
-                  final scale = 1.0 + controller.value * 0.09;
-
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      width: 225,
-                      height: 225,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            Colors.cyanAccent.withOpacity(0.9),
-                            Colors.blue.withOpacity(0.7),
-                            const Color(0xFF251A75),
-                            Colors.transparent,
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.cyanAccent.withOpacity(0.35),
-                            blurRadius: 50,
-                            spreadRadius: 15,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 105,
-                          height: 105,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              colors: [
-                                Colors.white,
-                                Colors.cyanAccent,
-                                Colors.blue,
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.cyanAccent.withOpacity(0.7),
-                                blurRadius: 35,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.auto_awesome,
-                            color: Color(0xFF101A48),
-                            size: 48,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 35),
-
-              Text(
-                'JARVIS',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                  color: Colors.cyanAccent.shade100,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Text(
-                status,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 14,
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 25),
-                padding: const EdgeInsets.all(18),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF131C32),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: Colors.cyanAccent.withOpacity(0.25),
-                  ),
-                ),
-                child: Text(
-                  response,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 35),
-
-              GestureDetector(
-                onTap: toggleVoice,
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF10182B),
+        title: const Text(
+          'MITRA AI',
+          style: TextStyle(
+            color: Colors.cyanAccent,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 3,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.language, color: Colors.cyanAccent),
+            onPressed: () {
+              setState(() => hindi = !hindi);
+              speak(hindi ? 'हिंदी भाषा चुनी गई।' : 'English selected.');
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 15),
+          AnimatedBuilder(
+            animation: animation,
+            builder: (context, child) {
+              double scale = 1 + animation.value * 0.12;
+              return Transform.scale(
+                scale: scale,
                 child: Container(
-                  width: 75,
-                  height: 75,
+                  width: 170,
+                  height: 170,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: listening
-                        ? Colors.redAccent
-                        : Colors.cyanAccent,
+                    gradient: const RadialGradient(
+                      colors: [
+                        Colors.white,
+                        Colors.cyanAccent,
+                        Colors.blue,
+                        Color(0xFF10182B),
+                      ],
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: (listening
-                                ? Colors.redAccent
-                                : Colors.cyanAccent)
-                            .withOpacity(0.4),
-                        blurRadius: 25,
-                        spreadRadius: 5,
+                        color: Colors.cyanAccent.withOpacity(0.5),
+                        blurRadius: 35,
+                        spreadRadius: 8,
                       ),
                     ],
                   ),
-                  child: Icon(
-                    listening ? Icons.stop : Icons.mic,
-                    color: Colors.black,
-                    size: 35,
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    color: Colors.white,
+                    size: 65,
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 12),
-
-              Text(
-                listening ? 'STOP LISTENING' : 'TAP TO TALK',
-                style: const TextStyle(
-                  color: Colors.white60,
-                  letterSpacing: 2,
-                  fontSize: 11,
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 25),
-                child: Row(
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            listening ? 'Listening...' : 'I AM MITRA AI',
+            style: const TextStyle(
+              color: Colors.cyanAccent,
+              letterSpacing: 3,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 15),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final item = messages[index];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: input,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Ask Mitra anything...',
-                          hintStyle: const TextStyle(
-                            color: Colors.white38,
-                          ),
-                          filled: true,
-                          fillColor: const Color(0xFF172139),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 15,
-                          ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Card(
+                        color: const Color(0xFF173653),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text('You: ${item['you']}'),
                         ),
-                        onSubmitted: (_) => sendMessage(),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      onPressed: sendMessage,
-                      icon: const Icon(
-                        Icons.send_rounded,
-                        color: Colors.cyanAccent,
-                        size: 28,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Card(
+                        color: const Color(0xFF123B40),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text('Mitra: ${item['jarvis']}'),
+                        ),
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onSubmitted: (_) => sendMessage(),
+                    decoration: InputDecoration(
+                      hintText: hindi
+                          ? 'मित्रा से कुछ पूछें...'
+                          : 'Ask Mitra something...',
+                      filled: true,
+                      fillColor: const Color(0xFF18243B),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: sendMessage,
+                  icon: const Icon(Icons.send, color: Colors.cyanAccent),
+                ),
+                IconButton(
+                  onPressed: toggleMic,
+                  icon: Icon(
+                    listening ? Icons.mic : Icons.mic_none,
+                    color: Colors.cyanAccent,
+                    size: 30,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
