@@ -1,39 +1,43 @@
 
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 void main() {
-  runApp(const JarvisAI());
+  runApp(const MitraAI());
 }
 
-class JarvisAI extends StatelessWidget {
-  const JarvisAI({super.key});
+class MitraAI extends StatelessWidget {
+  const MitraAI({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'JARVIS AI',
+      title: 'Mitra AI',
       theme: ThemeData.dark(),
-      home: const JarvisHome(),
+      home: const MitraHome(),
     );
   }
 }
 
-class JarvisHome extends StatefulWidget {
-  const JarvisHome({super.key});
+class MitraHome extends StatefulWidget {
+  const MitraHome({super.key});
 
   @override
-  State<JarvisHome> createState() => _JarvisHomeState();
+  State<MitraHome> createState() => _MitraHomeState();
 }
 
-class _JarvisHomeState extends State<JarvisHome>
+class _MitraHomeState extends State<MitraHome>
     with SingleTickerProviderStateMixin {
 
   late AnimationController controller;
   final TextEditingController input = TextEditingController();
 
-  String status = 'YOUR PERSONAL AI';
-  final List<Map<String, String>> messages = [];
+  bool listening = false;
+  bool hindi = true;
+
+  String status = 'Your AI Assistant';
+  String response = 'Hello! I am Mitra. How can I help you?';
 
   @override
   void initState() {
@@ -41,70 +45,8 @@ class _JarvisHomeState extends State<JarvisHome>
 
     controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
-  }
-
-  String getReply(String message) {
-    String m = message.toLowerCase();
-
-    if (m.contains('hello') || m.contains('hi') ||
-        m.contains('नमस्ते')) {
-      return 'Hello! I am Jarvis. How can I help you?';
-    }
-
-    if (m.contains('your name') || m.contains('नाम')) {
-      return 'My name is JARVIS AI.';
-    }
-
-    if (m.contains('who are you') || m.contains('कौन हो')) {
-      return 'I am your personal digital assistant.';
-    }
-
-    if (m.contains('time') || m.contains('समय')) {
-      return 'Current time: ${TimeOfDay.now().format(context)}';
-    }
-
-    if (m.contains('date') || m.contains('तारीख')) {
-      return 'Today: ${DateTime.now().day}/'
-          '${DateTime.now().month}/${DateTime.now().year}';
-    }
-
-    if (m.contains('jarvis')) {
-      return 'Yes! Jarvis is ready for your command.';
-    }
-
-    return 'I received your message. Connect an AI service '
-        'to get intelligent answers.';
-  }
-
-  void sendMessage() {
-    String text = input.text.trim();
-
-    if (text.isEmpty) return;
-
-    setState(() {
-      messages.add({
-        'sender': 'You',
-        'text': text,
-      });
-
-      input.clear();
-      status = 'THINKING...';
-    });
-
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted) return;
-
-      setState(() {
-        messages.add({
-          'sender': 'Jarvis',
-          'text': getReply(text),
-        });
-
-        status = 'SYSTEM ONLINE';
-      });
-    });
   }
 
   @override
@@ -114,109 +56,160 @@ class _JarvisHomeState extends State<JarvisHome>
     super.dispose();
   }
 
+  void toggleVoice() {
+    setState(() {
+      listening = !listening;
+      status = listening ? 'Listening Demo...' : 'Your AI Assistant';
+      response = listening
+          ? 'Voice demo started. Real microphone support will be added next.'
+          : 'Voice demo stopped. Type a message below.';
+    });
+  }
+
+  void sendMessage() {
+    if (input.text.trim().isEmpty) return;
+
+    String message = input.text.trim();
+
+    setState(() {
+      response = 'You: $message\n\nMitra: Hello! I received your message. Smart AI connection will be added in the next version.';
+      status = 'Ready to help';
+      listening = false;
+      input.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF030814),
-
+      backgroundColor: const Color(0xFF070B18),
       body: SafeArea(
         child: Column(
           children: [
 
-            // HEADER
+            // TOP BAR
             Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
                   const Icon(
-                    Icons.blur_on,
+                    Icons.auto_awesome,
                     color: Colors.cyanAccent,
-                    size: 35,
+                    size: 30,
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'JARVIS AI',
-                          style: TextStyle(
-                            color: Colors.cyanAccent,
-                            fontSize: 23,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 3,
-                          ),
-                        ),
-                        Text(
-                          'PERSONAL INTELLIGENCE SYSTEM',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 9,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ],
+                  const Text(
+                    'MITRA AI',
+                    style: TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 3,
                     ),
                   ),
-                  const Icon(
-                    Icons.settings,
-                    color: Colors.cyanAccent,
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        hindi = !hindi;
+                        response = hindi
+                            ? 'Hindi mode selected.'
+                            : 'English mode selected.';
+                      });
+                    },
+                    icon: const Icon(
+                      Icons.language,
+                      color: Colors.cyanAccent,
+                    ),
                   ),
+                  Text(hindi ? 'HI' : 'EN'),
                 ],
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
-            // GLOWING AI BALL
+            const Text(
+              'YOUR PERSONAL ASSISTANT',
+              style: TextStyle(
+                color: Colors.white54,
+                letterSpacing: 3,
+                fontSize: 11,
+              ),
+            ),
+
+            const SizedBox(height: 35),
+
+            // ANIMATED AI BALL
             AnimatedBuilder(
               animation: controller,
               builder: (context, child) {
                 double scale =
-                    0.92 + controller.value * 0.12;
+                    1.0 + controller.value * 0.09;
 
                 return Transform.scale(
                   scale: scale,
                   child: Container(
-                    height: 190,
-                    width: 190,
+                    width: 225,
+                    height: 225,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: const RadialGradient(
+                      gradient: RadialGradient(
                         colors: [
-                          Colors.white,
-                          Color(0xFF53E8FF),
-                          Color(0xFF0077FF),
-                          Color(0xFF07142F),
+                          Colors.cyanAccent.withOpacity(0.9),
+                          Colors.blue.withOpacity(0.7),
+                          const Color(0xFF251A75),
+                          Colors.transparent,
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.cyanAccent.withOpacity(0.5),
+                          color: Colors.cyanAccent.withOpacity(0.35),
                           blurRadius: 50,
-                          spreadRadius: 12,
+                          spreadRadius: 15,
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.white,
-                      size: 65,
+                    child: Center(
+                      child: Container(
+                        width: 105,
+                        height: 105,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [
+                              Colors.white,
+                              Colors.cyanAccent,
+                              Colors.blue,
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.cyanAccent.withOpacity(0.7),
+                              blurRadius: 35,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome,
+                          color: Color(0xFF101A48),
+                          size: 48,
+                        ),
+                      ),
                     ),
                   ),
                 );
               },
             ),
 
-            const SizedBox(height: 25),
+            const SizedBox(height: 35),
 
-            const Text(
-              'HELLO, I AM JARVIS',
+            Text(
+              'JARVIS',
               style: TextStyle(
-                color: Colors.cyanAccent,
-                fontSize: 17,
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                letterSpacing: 8,
+                color: Colors.cyanAccent.shade100,
               ),
             ),
 
@@ -226,129 +219,114 @@ class _JarvisHomeState extends State<JarvisHome>
               status,
               style: const TextStyle(
                 color: Colors.white54,
+                fontSize: 14,
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // RESPONSE BOX
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 25),
+              padding: const EdgeInsets.all(18),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFF131C32),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Colors.cyanAccent.withOpacity(0.25),
+                ),
+              ),
+              child: Text(
+                response,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ),
+
+            const Spacer(),
+
+            // VOICE BUTTON
+            GestureDetector(
+              onTap: toggleVoice,
+              child: Container(
+                width: 75,
+                height: 75,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: listening
+                      ? Colors.redAccent
+                      : Colors.cyanAccent,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (listening
+                              ? Colors.redAccent
+                              : Colors.cyanAccent)
+                          .withOpacity(0.4),
+                      blurRadius: 25,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  listening ? Icons.stop : Icons.mic,
+                  color: Colors.black,
+                  size: 35,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              listening ? 'STOP DEMO' : 'TAP TO TALK',
+              style: const TextStyle(
+                color: Colors.white60,
                 letterSpacing: 2,
                 fontSize: 11,
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
-            // CHAT
-            Expanded(
-              child: messages.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'How can I help you today?',
-                        style: TextStyle(
-                          color: Colors.white38,
-                          fontSize: 15,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final msg = messages[index];
-                        bool user = msg['sender'] == 'You';
-
-                        return Align(
-                          alignment: user
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.only(
-                              bottom: 12,
-                            ),
-                            padding: const EdgeInsets.all(14),
-                            constraints: const BoxConstraints(
-                              maxWidth: 290,
-                            ),
-                            decoration: BoxDecoration(
-                              color: user
-                                  ? Colors.blue.withOpacity(0.25)
-                                  : Colors.cyan.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.cyan.withOpacity(0.3),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  msg['sender']!,
-                                  style: const TextStyle(
-                                    color: Colors.cyanAccent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  msg['text']!,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-
-            // INPUT
+            // TEXT INPUT
             Padding(
-              padding: const EdgeInsets.all(15),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.mic_none,
-                    color: Colors.cyanAccent,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 10),
-
                   Expanded(
                     child: TextField(
                       controller: input,
-                      style: const TextStyle(
-                        color: Colors.white,
-                      ),
-                      onSubmitted: (_) => sendMessage(),
+                      style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Ask Jarvis anything...',
+                        hintText: 'Ask Mitra anything...',
                         hintStyle: const TextStyle(
                           color: Colors.white38,
                         ),
                         filled: true,
-                        fillColor: const Color(0xFF111C35),
+                        fillColor: const Color(0xFF172139),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(30),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 14,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 15,
                         ),
                       ),
+                      onSubmitted: (_) => sendMessage(),
                     ),
                   ),
-
-                  const SizedBox(width: 8),
-
-                  CircleAvatar(
-                    backgroundColor: Colors.cyanAccent,
-                    child: IconButton(
-                      onPressed: sendMessage,
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.black,
-                      ),
+                  const SizedBox(width: 10),
+                  IconButton(
+                    onPressed: sendMessage,
+                    icon: const Icon(
+                      Icons.send_rounded,
+                      color: Colors.cyanAccent,
+                      size: 28,
                     ),
                   ),
                 ],
