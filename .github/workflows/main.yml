@@ -19,6 +19,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+
       - name: Fix Kotlin plugin repositories
         run: |
           python - <<'PY'
@@ -42,31 +43,52 @@ jobs:
           if "pluginManagement {" not in s:
               p.write_text(block + s)
           PY
-      - name: Create Android project files
-        run: flutter create --platforms=android .
 
       - name: Get dependencies
-        
+        run: flutter pub get
+
       - name: Install Android NDK
         run: |
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+
           yes | "$SDKMANAGER" --licenses
+
           for i in 1 2 3; do
-            "$SDKMANAGER" --install "ndk;28.2.13676358" && exit 0
+            if "$SDKMANAGER" --install "ndk;28.2.13676358"; then
+              echo "NDK installed successfully"
+              exit 0
+            fi
+
             rm -rf "${ANDROID_HOME}/ndk/28.2.13676358"
             sleep 10
           done
+
           exit 1
-          run: flutter pub get
+
       - name: Add microphone permissions
         run: |
           python - <<'PY'
           from pathlib import Path
+
           p = Path("android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
-          s = s.replace("<application", '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
+
+          permissions = [
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>',
+              '    <uses-permission android:name="android.permission.INTERNET"/>'
+          ]
+
+          for permission in permissions:
+              if permission not in s:
+                  s = s.replace(
+                      "<application",
+                      permission + "\n    <application",
+                      1
+                  )
+
           p.write_text(s)
           PY
+
       - name: Build APK
         run: flutter build apk --release
 
