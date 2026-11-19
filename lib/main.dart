@@ -1,10 +1,13 @@
 
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'dart:math' as math;
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MitraAI());
 }
 
@@ -15,11 +18,23 @@ class MitraAI extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mitra AI',
-      theme: ThemeData.dark(),
+      title: 'Mitra AI - Jarvis',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF030712),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF00D9FF),
+          secondary: Color(0xFF168CFF),
+        ),
+      ),
       home: const JarvisHome(),
     );
   }
+}
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  ChatMessage(this.text, this.isUser);
 }
 
 class JarvisHome extends StatefulWidget {
@@ -30,143 +45,253 @@ class JarvisHome extends StatefulWidget {
 }
 
 class _JarvisHomeState extends State<JarvisHome>
-    with SingleTickerProviderStateMixin {
-  final stt.SpeechToText speech = stt.SpeechToText();
-  final FlutterTts tts = FlutterTts();
-  final TextEditingController controller = TextEditingController();
-  final List<Map<String, String>> messages = [];
+    with TickerProviderStateMixin {
 
-  late AnimationController animation;
+  late AnimationController breathe;
+  late AnimationController rotate;
+  late stt.SpeechToText speech;
+  late FlutterTts tts;
+
+  final TextEditingController input = TextEditingController();
+  final ScrollController scroll = ScrollController();
+
+  final List<ChatMessage> messages = [];
+
   bool listening = false;
-  bool hindi = true;
+  bool speaking = false;
+  bool ready = false;
+  bool english = false;
+
+  String status = 'JARVIS ONLINE';
+  String recognizedText = '';
 
   @override
   void initState() {
     super.initState();
-    animation = AnimationController(
+
+    breathe = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
 
-    setupVoice();
+    rotate = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
+
+    speech = stt.SpeechToText();
+    tts = FlutterTts();
+
+    initializeJarvis();
   }
 
-  Future<void> setupVoice() async {
-    await speech.initialize();
-    await tts.setLanguage('hi-IN');
-    await tts.setSpeechRate(0.45);
+  Future<void> initializeJarvis() async {
+    try {
+      ready = await speech.initialize(
+        onStatus: (value) {
+          if (value == 'notListening' && mounted) {
+            setState(() => listening = false);
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() {
+              listening = false;
+              status = 'MICROPHONE ERROR';
+            });
+          }
+        },
+      );
+
+      await tts.setSpeechRate(0.45);
+      await tts.setVolume(1.0);
+      await tts.setPitch(1.0);
+
+      if (mounted) {
+        setState(() => status = 'JARVIS ONLINE');
+      }
+    } catch (e) {
+      debugPrint('Initialization error: $e');
+    }
   }
 
   Future<void> speak(String text) async {
     await tts.stop();
-    await tts.speak(text);
-  }
 
-  String brain(String question) {
-    String q = question.toLowerCase().trim();
+    if (!mounted) return;
 
-    if (q.contains('hello') || q.contains('नमस्ते') ||
-        q.contains('हेलो') || q.contains('hi')) {
-      return hindi ? 'नमस्ते! मैं मित्रा हूँ। आपकी क्या मदद करूँ?'
-          : 'Hello! I am Mitra. How can I help you?';
-    }
-
-    if (q.contains('तुम कौन') || q.contains('who are you')) {
-      return hindi ? 'मैं मित्रा AI हूँ, आपका वॉइस असिस्टेंट।'
-          : 'I am Mitra AI, your voice assistant.';
-    }
-
-    if (q.contains('समय') || q.contains('time')) {
-      return 'अभी समय ${TimeOfDay.now().format(context)} है।';
-    }
-
-    if (q.contains('तारीख') || q.contains('date')) {
-      final now = DateTime.now();
-      return 'आज ${now.day}-${now.month}-${now.year} है।';
-    }
-
-    if (q.contains('भारत की राजधानी') ||
-        q.contains('capital of india')) {
-      return 'भारत की राजधानी नई दिल्ली है।';
-    }
-
-    if (q.contains('धन्यवाद') || q.contains('thank')) {
-      return hindi ? 'आपका स्वागत है!' : 'You are welcome!';
-    }
-
-    if (q.contains('तुम्हारा नाम') || q.contains('your name')) {
-      return 'मेरा नाम मित्रा AI है।';
-    }
-
-    if (q.contains('बाय') || q.contains('bye')) {
-      return 'अलविदा! फिर मिलेंगे।';
-    }
-
-    return hindi
-        ? 'मैंने आपका सवाल सुना है। अभी मेरा बेसिक ब्रेन है। इस सवाल का जवाब मेरे पास उपलब्ध नहीं है।'
-        : 'I heard your question. My basic brain does not have an answer for this yet.';
-  }
-
-  void addMessage(String question, String answer) {
     setState(() {
-      messages.add({'you': question, 'jarvis': answer});
+      speaking = true;
+      status = 'JARVIS SPEAKING';
     });
+
+    await tts.setLanguage(english ? 'en-IN' : 'hi-IN');
+    await tts.speak(text);
+
+    if (mounted) {
+      setState(() {
+        speaking = false;
+        status = 'JARVIS ONLINE';
+      });
+    }
   }
 
-  Future<void> sendMessage() async {
-    String question = controller.text.trim();
-    if (question.isEmpty) return;
+  Future<void> startListening() async {
+    if (!ready) {
+      await initializeJarvis();
+    }
 
-    controller.clear();
-    String answer = brain(question);
-    addMessage(question, answer);
-    await speak(answer);
-  }
-
-  Future<void> toggleMic() async {
-    if (listening) {
-      await speech.stop();
-      setState(() => listening = false);
+    if (!ready) {
+      showMessage('Microphone service उपलब्ध नहीं है।');
       return;
     }
 
-    bool available = await speech.initialize(
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
-          if (mounted) setState(() => listening = false);
-        }
-      },
-      onError: (error) {
-        if (mounted) setState(() => listening = false);
-      },
-    );
+    await tts.stop();
 
-    if (!available) {
-      await speak('माइक्रोफोन उपलब्ध नहीं है।');
-      return;
-    }
-
-    setState(() => listening = true);
+    setState(() {
+      listening = true;
+      speaking = false;
+      recognizedText = '';
+      status = 'LISTENING...';
+    });
 
     await speech.listen(
-      localeId: hindi ? 'hi_IN' : 'en_IN',
+      localeId: english ? 'en_IN' : 'hi_IN',
       listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 3),
+      pauseFor: const Duration(seconds: 4),
       onResult: (result) {
-        if (result.recognizedWords.isNotEmpty) {
-          controller.text = result.recognizedWords;
-          if (result.finalResult) {
-            sendMessage();
+        if (!mounted) return;
+
+        setState(() {
+          recognizedText = result.recognizedWords;
+        });
+
+        if (result.finalResult) {
+          setState(() => listening = false);
+
+          if (recognizedText.trim().isNotEmpty) {
+            sendMessage(recognizedText);
+          } else {
+            setState(() => status = 'JARVIS ONLINE');
           }
         }
       },
     );
   }
 
+  Future<void> stopListening() async {
+    await speech.stop();
+    if (mounted) {
+      setState(() {
+        listening = false;
+        status = 'JARVIS ONLINE';
+      });
+    }
+  }
+
+  void showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+
+  void addMessage(String text, bool user) {
+    setState(() {
+      messages.add(ChatMessage(text, user));
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (scroll.hasClients) {
+        scroll.animateTo(
+          scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> sendMessage([String? voiceText]) async {
+    final text = (voiceText ?? input.text).trim();
+
+    if (text.isEmpty) return;
+
+    input.clear();
+    addMessage(text, true);
+
+    setState(() => status = 'THINKING...');
+
+    final answer = getLocalAnswer(text);
+
+    addMessage(answer, false);
+
+    await speak(answer);
+  }
+
+  String getLocalAnswer(String text) {
+    final q = text.toLowerCase();
+
+    if (q.contains('hello') ||
+        q.contains('नमस्ते') ||
+        q.contains('हेलो')) {
+      return english
+          ? 'Hello! I am Jarvis. How can I help you?'
+          : 'नमस्ते! मैं Jarvis हूँ। बताइए, मैं आपकी क्या मदद करूँ?';
+    }
+
+    if (q.contains('your name') ||
+        q.contains('नाम') ||
+        q.contains('कौन हो')) {
+      return english
+          ? 'My name is Jarvis, your Mitra AI assistant.'
+          : 'मेरा नाम Jarvis है। मैं आपका Mitra AI Assistant हूँ।';
+    }
+
+    if (q.contains('time') || q.contains('समय')) {
+      final now = TimeOfDay.now();
+      return english
+          ? 'The time is ${now.format(context)}.'
+          : 'अभी समय ${now.format(context)} है।';
+    }
+
+    if (q.contains('date') || q.contains('तारीख')) {
+      final now = DateTime.now();
+      return english
+          ? 'Today is ${now.day}-${now.month}-${now.year}.'
+          : 'आज ${now.day}-${now.month}-${now.year} है।';
+    }
+
+    if (q.contains('your creator') ||
+        q.contains('किसने बनाया')) {
+      return english
+          ? 'I am being developed as your Mitra AI project.'
+          : 'मुझे Mitra AI प्रोजेक्ट के रूप में बनाया जा रहा है।';
+    }
+
+    if (q.contains('stop') ||
+        q.contains('बंद करो')) {
+      return english
+          ? 'Okay. I am ready when you need me.'
+          : 'ठीक है। जब जरूरत हो, मुझे बुलाइए।';
+    }
+
+    if (q.contains('help') || q.contains('मदद')) {
+      return english
+          ? 'I can tell you the time, date and respond to basic commands. Internet AI will be connected separately.'
+          : 'मैं अभी समय, तारीख और कुछ बेसिक कमांड समझ सकता हूँ। इंटरनेट AI अलग से कनेक्ट किया जाएगा।';
+    }
+
+    return english
+        ? 'I heard you say: $text. My online AI connection is not configured yet.'
+        : 'मैंने सुना: $text। मेरा ऑनलाइन AI कनेक्शन अभी सेटअप नहीं हुआ है।';
+  }
+
   @override
   void dispose() {
-    animation.dispose();
-    controller.dispose();
+    breathe.dispose();
+    rotate.dispose();
+    input.dispose();
+    scroll.dispose();
     speech.stop();
     tts.stop();
     super.dispose();
@@ -175,148 +300,387 @@ class _JarvisHomeState extends State<JarvisHome>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF070B18),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF10182B),
-        title: const Text(
-          'MITRA AI',
-          style: TextStyle(
-            color: Colors.cyanAccent,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 3,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.language, color: Colors.cyanAccent),
-            onPressed: () {
-              setState(() => hindi = !hindi);
-              speak(hindi ? 'हिंदी भाषा चुनी गई।' : 'English selected.');
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 15),
-          AnimatedBuilder(
-            animation: animation,
-            builder: (context, child) {
-              double scale = 1 + animation.value * 0.12;
-              return Transform.scale(
-                scale: scale,
-                child: Container(
-                  width: 170,
-                  height: 170,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const RadialGradient(
-                      colors: [
-                        Colors.white,
-                        Colors.cyanAccent,
-                        Colors.blue,
-                        Color(0xFF10182B),
-                      ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            header(),
+            Expanded(
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Expanded(
+                    flex: 5,
+                    child: orbSection(),
+                  ),
+                  Text(
+                    status,
+                    style: const TextStyle(
+                      color: Color(0xFF00D9FF),
+                      letterSpacing: 4,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyanAccent.withOpacity(0.5),
-                        blurRadius: 35,
-                        spreadRadius: 8,
-                      ),
-                    ],
                   ),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: Colors.white,
-                    size: 65,
+                  const SizedBox(height: 12),
+                  Expanded(
+                    flex: 4,
+                    child: chatSection(),
                   ),
+                ],
+              ),
+            ),
+            inputSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget header() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 15,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.auto_awesome,
+            color: Color(0xFF00D9FF),
+            size: 27,
+          ),
+          const SizedBox(width: 10),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'MITRA AI',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 3,
                 ),
+              ),
+              Text(
+                'POWERED BY JARVIS',
+                style: TextStyle(
+                  fontSize: 8,
+                  color: Colors.white54,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () {
+              setState(() => english = !english);
+              showMessage(
+                english ? 'English mode' : 'Hindi mode',
               );
             },
-          ),
-          const SizedBox(height: 12),
-          Text(
-            listening ? 'Listening...' : 'I AM MITRA AI',
-            style: const TextStyle(
-              color: Colors.cyanAccent,
-              letterSpacing: 3,
-              fontSize: 17,
+            icon: const Icon(
+              Icons.language,
+              color: Color(0xFF00D9FF),
             ),
           ),
-          const SizedBox(height: 15),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
-                final item = messages[index];
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Card(
-                        color: const Color(0xFF173653),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text('You: ${item['you']}'),
-                        ),
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Card(
-                        color: const Color(0xFF123B40),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text('Mitra: ${item['jarvis']}'),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    onSubmitted: (_) => sendMessage(),
-                    decoration: InputDecoration(
-                      hintText: hindi
-                          ? 'मित्रा से कुछ पूछें...'
-                          : 'Ask Mitra something...',
-                      filled: true,
-                      fillColor: const Color(0xFF18243B),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: sendMessage,
-                  icon: const Icon(Icons.send, color: Colors.cyanAccent),
-                ),
-                IconButton(
-                  onPressed: toggleMic,
-                  icon: Icon(
-                    listening ? Icons.mic : Icons.mic_none,
-                    color: Colors.cyanAccent,
-                    size: 30,
-                  ),
-                ),
-              ],
+          IconButton(
+            onPressed: () {
+              setState(() => messages.clear());
+            },
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Colors.white54,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget orbSection() {
+    return Center(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([breathe, rotate]),
+        builder: (context, child) {
+          final scale = 0.94 + breathe.value * 0.10;
+
+          return Transform.scale(
+            scale: scale,
+            child: SizedBox(
+              width: 255,
+              height: 255,
+              child: CustomPaint(
+                painter: OrbPainter(
+                  rotation: rotate.value * math.pi * 2,
+                  glow: breathe.value,
+                  active: listening || speaking,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.all_inclusive,
+                    color: Colors.white,
+                    size: 75,
+                    shadows: [
+                      Shadow(
+                        color: Color(0xFF00D9FF),
+                        blurRadius: 30,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget chatSection() {
+    if (messages.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.graphic_eq,
+              size: 32,
+              color: Color(0xFF00D9FF),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Hello, I am Jarvis',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 5),
+            Text(
+              'Tap the microphone to talk',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: scroll,
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final msg = messages[index];
+
+        return Align(
+          alignment: msg.isUser
+              ? Alignment.centerRight
+              : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 5),
+            padding: const EdgeInsets.all(12),
+            constraints: const BoxConstraints(maxWidth: 300),
+            decoration: BoxDecoration(
+              color: msg.isUser
+                  ? const Color(0xFF075985)
+                  : const Color(0xFF101B2B),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: const Color(0xFF00D9FF).withOpacity(0.25),
+              ),
+            ),
+            child: Text(
+              msg.text,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget inputSection() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 15),
+      decoration: const BoxDecoration(
+        color: Color(0xFF091321),
+        border: Border(
+          top: BorderSide(color: Color(0xFF153047)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: input,
+              onSubmitted: (_) => sendMessage(),
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Ask Jarvis anything...',
+                hintStyle: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 13,
+                ),
+                filled: true,
+                fillColor: const Color(0xFF142338),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 13,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: listening
+                ? stopListening
+                : startListening,
+            style: IconButton.styleFrom(
+              backgroundColor: listening
+                  ? Colors.red
+                  : const Color(0xFF007FA8),
+              foregroundColor: Colors.white,
+              fixedSize: const Size(48, 48),
+            ),
+            icon: Icon(
+              listening ? Icons.stop : Icons.mic,
+            ),
+          ),
+          const SizedBox(width: 5),
+          IconButton(
+            onPressed: () => sendMessage(),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFF00A8CC),
+              foregroundColor: Colors.white,
+              fixedSize: const Size(48, 48),
+            ),
+            icon: const Icon(Icons.send),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OrbPainter extends CustomPainter {
+  final double rotation;
+  final double glow;
+  final bool active;
+
+  OrbPainter({
+    required this.rotation,
+    required this.glow,
+    required this.active,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * 0.34;
+
+    final color = active
+        ? const Color(0xFF55EEFF)
+        : const Color(0xFF008CFF);
+
+    final outerGlow = Paint()
+      ..color = color.withOpacity(0.16 + glow * 0.12)
+      ..maskFilter = const MaskFilter.blur(
+        BlurStyle.normal,
+        35,
+      );
+
+    canvas.drawCircle(center, radius + 22, outerGlow);
+
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..shader = const LinearGradient(
+        colors: [
+          Color(0xFF00FFFF),
+          Color(0xFF0066FF),
+          Color(0xFF8B5CFF),
+          Color(0xFF00FFFF),
+        ],
+      ).createShader(
+        Rect.fromCircle(center: center, radius: radius + 15),
+      );
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(rotation);
+    canvas.translate(-center.dx, -center.dy);
+
+    canvas.drawCircle(center, radius + 15, ringPaint);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius + 24),
+      0,
+      math.pi * 1.35,
+      false,
+      Paint()
+        ..color = const Color(0xFF00E5FF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+
+    canvas.restore();
+
+    final ballPaint = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(-0.35, -0.4),
+        radius: 0.95,
+        colors: [
+          Color(0xFFB9FFFF),
+          Color(0xFF19B9FF),
+          Color(0xFF0644B5),
+          Color(0xFF020A29),
+        ],
+        stops: [0.0, 0.25, 0.65, 1.0],
+      ).createShader(
+        Rect.fromCircle(center: center, radius: radius),
+      );
+
+    canvas.drawCircle(center, radius, ballPaint);
+
+    final shine = Paint()
+      ..color = Colors.white.withOpacity(0.55)
+      ..maskFilter = const MaskFilter.blur(
+        BlurStyle.normal,
+        12,
+      );
+
+    canvas.drawCircle(
+      center + Offset(-radius * 0.3, -radius * 0.35),
+      radius * 0.13,
+      shine,
+    );
+
+    final orbitPaint = Paint()
+      ..color = const Color(0xFF00E5FF).withOpacity(0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: center,
+        width: radius * 2.5,
+        height: radius * 0.65,
+      ),
+      orbitPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant OrbPainter oldDelegate) {
+    return oldDelegate.rotation != rotation ||
+        oldDelegate.glow != glow ||
+        oldDelegate.active != active;
   }
 }
