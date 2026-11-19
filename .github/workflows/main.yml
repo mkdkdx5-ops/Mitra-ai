@@ -25,7 +25,15 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
+      - name: Add microphone permissions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace("<application", '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
+          p.write_text(s)
+          PY
       - name: Build APK
         run: flutter build apk --release
 
