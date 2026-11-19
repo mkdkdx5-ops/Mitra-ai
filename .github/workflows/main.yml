@@ -19,7 +19,29 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Fix Kotlin plugin repositories
+        run: |
+          python - <<'PY'
+          import shutil
+          from pathlib import Path
 
+          flutter = Path(shutil.which("flutter")).resolve()
+          sdk = flutter.parent.parent
+          p = sdk / "packages/flutter_tools/gradle/settings.gradle.kts"
+
+          s = p.read_text()
+          block = """pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          """
+          if "pluginManagement {" not in s:
+              p.write_text(block + s)
+          PY
       - name: Create Android project files
         run: flutter create --platforms=android .
 
